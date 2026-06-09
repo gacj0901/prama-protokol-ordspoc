@@ -34,8 +34,8 @@ def clamp(value: float, lower: float = 0.0, upper: float = 1.0) -> float:
 
 
 def xi_accumulate(previous_xi: float, delta: float, retention: float = 0.72) -> float:
-    """Accumulate structural load with bounded retention."""
-    return clamp((previous_xi * retention) + delta, 0.0, 1.0)
+    """Accumulate structural load with retained, non-saturating memory."""
+    return max(0.0, (previous_xi * retention) + delta)
 
 
 def xi_reference(values: list[float]) -> float:
@@ -59,7 +59,8 @@ def collapse_xi_norm(xi_ref: float, threshold: float) -> float:
     """Normalize accumulated load against the threshold surface."""
     if threshold <= 0:
         return 1.0
-    return clamp(xi_ref / threshold)
+    collapse_xi_norm_raw = xi_ref / threshold
+    return clamp(collapse_xi_norm_raw)
 
 
 def orchestration_delta(stages: list[dict[str, float]]) -> list[float]:
@@ -114,15 +115,16 @@ def assess_trajectory(stages: list[dict[str, float]]) -> dict[str, float | int |
     persistence = xi_reference(xi_values)
     permissivity = lambda_permissivity(aci, persistence)
     threshold = theta_threshold(permissivity)
+    collapse_raw = persistence / threshold if threshold > 0 else 0.0
     collapse_norm = collapse_xi_norm(persistence, threshold)
     recovery_gap = clamp(persistence - threshold + (0.35 * permissivity))
     irreversibility = clamp((0.7 * recovery_gap) + (0.3 * xi_values[-1] if xi_values else 0.0))
 
     risk_score = clamp(
-        (0.38 * aci) +
-        (0.24 * persistence) +
-        (0.20 * intensity) +
-        (0.18 * irreversibility)
+        (0.30 * aci) +
+        (0.18 * persistence) +
+        (0.12 * intensity) +
+        (0.40 * irreversibility)
     ) * 100.0
 
     return {
@@ -136,6 +138,7 @@ def assess_trajectory(stages: list[dict[str, float]]) -> dict[str, float | int |
         "irreversibility": round(irreversibility, 3),
         "permissivity_lambda": round(permissivity, 3),
         "threshold_theta": round(threshold, 3),
+        "collapse_xi_norm_raw": round(collapse_raw, 3),
         "collapse_xi_norm": round(collapse_norm, 3),
     }
 
@@ -144,8 +147,16 @@ def _repeat(demand: float, autonomy: float, count: int) -> list[dict[str, float]
     return [{"demand": demand, "autonomy": autonomy} for _ in range(count)]
 
 
+def _ramp(start: float, end: float, count: int) -> list[float]:
+    if count <= 1:
+        return [start]
+    return [start + i * (end - start) / (count - 1) for i in range(count)]
+
+
 def trajectories() -> list[dict[str, object]]:
     """Return deterministic abstract trajectories."""
+    e_demand = _ramp(0.57, 0.78, 8)
+    e_autonomy = [0.59 + i * (0.70 - 0.59) / 7 for i in range(8)]
     return [
         {
             "family": "A2 autonomous orchestration extreme",
@@ -166,6 +177,26 @@ def trajectories() -> list[dict[str, object]]:
         {
             "family": "C non-orchestrated control",
             "stages": _repeat(0.34, 0.06, 8),
+        },
+        {
+            "family": "D interrupted autonomous burst",
+            "stages": [
+                {"demand": 0.98, "autonomy": 0.92},
+                {"demand": 0.96, "autonomy": 0.90},
+                {"demand": 0.35, "autonomy": 0.20},
+                {"demand": 0.95, "autonomy": 0.91},
+                {"demand": 0.34, "autonomy": 0.19},
+                {"demand": 0.93, "autonomy": 0.90},
+                {"demand": 0.32, "autonomy": 0.18},
+                {"demand": 0.30, "autonomy": 0.17},
+            ],
+        },
+        {
+            "family": "E sustained escalation without recovery",
+            "stages": [
+                {"demand": demand, "autonomy": autonomy}
+                for demand, autonomy in zip(e_demand, e_autonomy)
+            ],
         },
     ]
 
@@ -190,10 +221,12 @@ def render_table(rows: list[dict[str, object]]) -> str:
         "risk_score",
         "intensity",
         "persistence",
+        "collapse_raw",
         "irreversibility",
     ]
     widths = {column: len(column) for column in columns}
     for row in rows:
+        row["collapse_raw"] = row["collapse_xi_norm_raw"]
         for column in columns:
             widths[column] = max(widths[column], len(str(row[column])))
 
@@ -225,6 +258,8 @@ def write_artifacts(rows: list[dict[str, object]], output: str) -> None:
             "A2 autonomous orchestration extreme",
             "A1 autonomous orchestration high",
             "A0 autonomous orchestration moderate",
+            "E sustained escalation without recovery",
+            "D interrupted autonomous burst",
             "B human-gated orchestration",
             "C non-orchestrated control",
         ],

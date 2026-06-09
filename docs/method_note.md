@@ -16,6 +16,8 @@ ACI = mean(demand x autonomy)
 
 ACI is intentionally simple. It does not claim to measure real-world capability or operational effectiveness. It measures abstract coupling between pressure and autonomous progression.
 
+ACI is explanatory, not decisive. PRAMA can rank sustained escalation above interrupted bursts even when mean coupling is lower.
+
 ## PRAMA Terms
 
 `Delta(t)` is the per-stage orchestration delta. In this demo it is the pointwise coupling `demand(t) x autonomy(t)`.
@@ -41,7 +43,7 @@ PRAMA separates trajectories by coupling, persistence and recovery. A trajectory
 In this demonstration the intended ordering is:
 
 ```text
-A2 > A1 > A0 >> B > C
+A2 > A1 > A0 > E > D >> B > C
 ```
 
 ## Limitations And Future Work

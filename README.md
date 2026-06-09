@@ -45,8 +45,10 @@ Get-Content results\example_run.json -Encoding UTF8
 
 `ACI` is the Autonomous Coupling Index, computed as mean `demand x autonomy`. PRAMA then combines coupling, persistence, intensity and recovery difficulty into a structural score. The expected ordering is:
 
+ACI is explanatory, not decisive. PRAMA can rank sustained escalation above interrupted bursts even when mean coupling is lower.
+
 ```text
-A2 > A1 > A0 >> B > C
+A2 > A1 > A0 > E > D >> B > C
 ```
 
 
