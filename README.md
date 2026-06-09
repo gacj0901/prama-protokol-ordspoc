@@ -49,6 +49,15 @@ Get-Content results\example_run.json -Encoding UTF8
 A2 > A1 > A0 >> B > C
 ```
 
+
+## Methodological Notes
+
+ORDSPOC is a structural proof-of-concept intended to demonstrate trajectory-level discrimination rather than provide a calibrated cyber-risk model.
+
+The weights are a design decision that reflects the priority of sustained orchestration over counting and can be calibrated against real-world datasets in future work.
+
+Accordingly, the present implementation should be interpreted as a demonstration of measurement capability rather than a production-grade risk assessment system.
+
 ## License
 
 MIT License.  
