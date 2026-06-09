@@ -1,6 +1,6 @@
 # ORDSPOC — Orchestration Risk Demonstrator: Structural Proof-of-Concept
 
-**Aptadynamic PRAMA Protokol: Structural Measurement Layer for monitor Autonomous Orchestration Risk**
+**Aptadynamic PRAMA Protokol: Structural measurement layer for monitoring autonomous orchestration risk**
 
 ORDSPOC is a structural, safe and reproducible proof-of-concept for contrasting discrete stage counting with trajectory-level measurement of autonomous orchestration risk.
 
@@ -51,7 +51,7 @@ A2 > A1 > A0 >> B > C
 
 ## License
 
-MIT License.  `1-15109169911`.
+MIT License.  
 
 ## Suggested Provisional Citation
 
