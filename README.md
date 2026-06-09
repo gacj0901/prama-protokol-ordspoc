@@ -32,6 +32,13 @@ The script prints a table and writes:
 - `results/example_run.json`
 - `examples/sample_output.txt`
 
+In PowerShell, read generated outputs with explicit UTF-8 decoding:
+
+```powershell
+Get-Content examples\sample_output.txt -Encoding UTF8
+Get-Content results\example_run.json -Encoding UTF8
+```
+
 ## Interpreting The Output
 
 `stage_count` is the discrete baseline. In the demonstration, A2/A1/A0 have 6 stages, while B/C have 8 stages, so counting alone can make B and C appear equal or higher risk.

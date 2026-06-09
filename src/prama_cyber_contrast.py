@@ -231,10 +231,9 @@ def write_artifacts(rows: list[dict[str, object]], output: str) -> None:
         "method_note": METHOD_NOTE,
     }
 
-    (root / "results" / "example_run.json").write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    with (root / "results" / "example_run.json").open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
     (root / "examples" / "sample_output.txt").write_text(output + "\n", encoding="utf-8")
 
 
