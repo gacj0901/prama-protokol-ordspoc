@@ -1,0 +1,244 @@
+"""
+prama_orchestration.py — PRAMA Protokol aplicado a trayectorias de orquestación
+================================================================================
+Demostración de concepto para el hueco que el reporte de Anthropic
+"What we learned mapping a year's worth of AI-enabled cyber threats"
+(jun 2026) documenta:
+
+  El conteo de técnicas dejó de discriminar el riesgo de un actor. El caso
+  estatal de nov-2025 usó ~30 técnicas (riesgo medio por conteo) pero riesgo
+  real máximo, porque lo peligroso era la ORQUESTACIÓN AUTÓNOMA: encadenar
+  etapas con mínima intervención humana. MITRE ATT&CK cataloga técnicas
+  discretas; no tiene identificador para la dinámica de acoplamiento que
+  define el riesgo. El reporte declara que el marco debe evolucionar.
+
+PRAMA mide precisamente esa dimensión: no el inventario de etapas, sino el
+acoplamiento estructural de la trayectoria a lo largo del tiempo.
+
+SEGURIDAD / ALCANCE
+-------------------
+Esta demostración NO contiene ni modela técnicas operativas de ataque.
+Representa la FORMA DINÁMICA abstracta de una orquestación mediante dos
+magnitudes adimensionales por etapa:
+    demand    ∈ [0,1]  exigencia operacional abstracta de la etapa
+    autonomy  ∈ [0,1]  fracción ejecutada sin intervención humana (1 = autónoma)
+y deriva de ellas el desacople instantáneo Δ que alimenta el núcleo
+aptadinámico. Es metodología de detección/medición, no de ataque.
+
+NÚCLEO FORMAL
+-------------
+    Δ(t)   desacople instantáneo (tasa de tensión que entra al sistema)
+    Ξ(t)   acumulador de tensión con memoria  (Ξ = β·Ξ_prev + Δ)
+    λ(t)   permisividad remanente             (λ = λ₀/(1+Ξ_norm))
+    Θ(λ)   umbral dinámico contráctil         (Θ = θ₀·λ)
+    cruce  Ξ_norm > Θ        evento de viabilidad (acumulado)
+    régimen: propiedad de trayectoria, requiere historia para clasificarse
+"""
+
+import math
+
+
+# ============================================================
+# Núcleo aptadinámico
+# ============================================================
+def clamp(x, lo=0.0, hi=1.0):
+    return max(lo, min(hi, x))
+
+def xi_accumulate(deltas, beta=0.5):
+    """Ξ(t) = β·Ξ(t-1) + Δ(t). Acumulador con memoria geométrica."""
+    xi, acc = [], 0.0
+    for d in deltas:
+        acc = beta * acc + d
+        xi.append(acc)
+    return xi
+
+def xi_reference(n, delta_ref=0.15, beta=0.5):
+    """Ξ_ref: unidad de escala. Ξ final de una trayectoria nominal de n etapas
+    con Δ=delta_ref constante. Normaliza Ξ para que el umbral sea comparable."""
+    acc = 0.0
+    for _ in range(n):
+        acc = beta * acc + delta_ref
+    return acc if acc > 0 else 1.0
+
+def lambda_permissivity(xi_norm, lambda0=1.0):
+    """λ = λ₀/(1+Ξ_norm). Permisividad que se agota con la tensión acumulada."""
+    return lambda0 / (1.0 + xi_norm)
+
+def theta_threshold(lam, theta0=0.35):
+    """Θ(λ) = θ₀·λ. Umbral que se contrae con la permisividad."""
+    return theta0 * lam
+
+def collapse_xi_norm(theta0=0.35, lambda0=1.0):
+    """Cruce analítico de referencia: Ξ_norm* = (θ₀·λ₀)/(1+θ₀·λ₀)."""
+    return (theta0 * lambda0) / (1.0 + theta0 * lambda0)
+
+
+# ============================================================
+# Adaptador de dominio: orquestación abstracta → Δ(t)
+# ============================================================
+def orchestration_delta(stages):
+    """Δ por etapa = demand · autonomy · (0.5 + 0.5·depth).
+
+    - autonomy alta  → más desacople: ejecutar sin freno humano acumula tensión.
+      La intervención humana (1 - autonomy) actúa como la fricción externa del
+      marco; un humano en el bucle introduce el freno que el sistema no genera.
+    - depth (profundidad en el ciclo) pondera más las etapas tardías: orquestar
+      fases avanzadas pesa más que la actividad inicial.
+    """
+    n = len(stages)
+    deltas = []
+    for i, s in enumerate(stages):
+        demand = clamp(s["demand"])
+        autonomy = clamp(s["autonomy"])
+        depth = (i + 1) / n
+        deltas.append(clamp(demand * autonomy * (0.5 + 0.5 * depth)))
+    return deltas
+
+
+# ============================================================
+# Evaluación de trayectoria
+# ============================================================
+# Pesos del score de riesgo. DECISIÓN, no derivación: reflejan la prioridad
+# del reporte (orquestación sostenida > conteo). Calibrables contra datos
+# reales, igual que delta_ref. Suman 1 → score natural en [0,100].
+W_INTENSITY      = 0.40   # cuán intensa es la orquestación (nivel medio de Δ)
+W_PERSISTENCE    = 0.35   # qué fracción se sostiene tras el primer cruce
+W_IRREVERSIBILITY = 0.25  # qué tan poco recupera (freno ausente)
+
+def assess_trajectory(stages, theta0=0.35, lambda0=1.0, beta=0.5,
+                      delta_ref=0.15, label=""):
+    deltas   = orchestration_delta(stages)
+    n        = len(deltas)
+    xi_ref   = xi_reference(n, delta_ref, beta)
+    xi_series = xi_accumulate(deltas, beta)
+
+    first_crossing = None
+    crossings = 0
+    recovery_points = []
+    rows = []
+
+    for i, (delta, xi) in enumerate(zip(deltas, xi_series)):
+        xi_norm = xi / (xi_ref + 1e-9)
+        lam     = lambda_permissivity(xi_norm, lambda0)
+        theta   = theta_threshold(lam, theta0)
+
+        accumulated_crossed = xi_norm > theta and i > 0   # Ξ acumulado cruza
+        instant_crossed     = delta   > theta and i > 0   # Δ instantáneo cruza
+        instant_recovered   = (theta - delta) > 0 and i > 0
+
+        if accumulated_crossed:
+            crossings += 1
+            if first_crossing is None:
+                first_crossing = i
+        if first_crossing is not None and instant_recovered:
+            recovery_points.append(i)
+
+        rows.append({
+            "i": i, "delta": delta, "xi_norm": xi_norm, "theta": theta,
+            "accumulated_crossed": accumulated_crossed,
+            "instant_crossed": instant_crossed,
+            "instant_recovered": instant_recovered,
+        })
+
+    recovered = len(recovery_points) > 0
+    post = rows[first_crossing:] if first_crossing is not None else []
+    instant_crossing_ratio = (
+        sum(1 for r in post if r["instant_crossed"]) / len(post) if post else 0.0
+    )
+
+    # --- Régimen: propiedad de trayectoria ---
+    if first_crossing is None:
+        regime, risk_level = "II_ORGANIZED_STABILITY", "BAJO"
+    elif recovered:
+        regime, risk_level = "III_STRUCTURAL_PULSATION", "MEDIO"
+    else:
+        regime, risk_level = "IV_ENTROPIC_COLLAPSE", "ALTO"
+
+    # --- Score: tres dimensiones continuas, ninguna satura ---
+    intensity = sum(deltas) / n                 # nivel medio de orquestación
+    persistence = instant_crossing_ratio        # fracción sostenida post-cruce
+    irreversibility = clamp(
+        1.0 - (len(recovery_points) / len(post)) if post else 0.0
+    )                                            # ausencia de freno (continuo)
+
+    raw = (W_INTENSITY * intensity
+           + W_PERSISTENCE * persistence
+           + W_IRREVERSIBILITY * irreversibility)
+    risk_score = round(100 * raw, 1)
+
+    return {
+        "label": label, "n_stages": n,
+        "first_crossing": first_crossing,
+        "accumulated_crossing_ratio": round(crossings / max(1, n - 1), 3),
+        "instant_crossing_ratio": round(instant_crossing_ratio, 3),
+        "recovery_observed": recovered,
+        "recovery_points": recovery_points,
+        "regime": regime, "risk_level": risk_level, "risk_score": risk_score,
+        "intensity": round(intensity, 3),
+        "persistence": round(persistence, 3),
+        "irreversibility": round(irreversibility, 3),
+    }
+
+
+def baseline_count(stages):
+    """Marco tipo ATT&CK: cuenta etapas/técnicas distintas. Ignora acoplamiento."""
+    return len(stages)
+
+
+# ============================================================
+# Demostración de contraste
+# ============================================================
+def _mk(pairs):
+    return [{"demand": d, "autonomy": a} for d, a in pairs]
+
+if __name__ == "__main__":
+    print("=" * 78)
+    print("  PRAMA — orquestación vs. conteo de técnicas")
+    print(f"  cruce analítico de referencia: Ξ_norm* = {collapse_xi_norm():.3f}")
+    print("=" * 78)
+
+    # Trayectorias de alta autonomía, distinta intensidad (todas alto riesgo):
+    A2 = _mk([(.50, .95), (.70, .97), (.85, .98), (.92, .99), (.97, .99), (.99, .99)])
+    A  = _mk([(.40, .90), (.60, .95), (.70, .95), (.80, .98), (.90, .98), (.95, .99)])
+    A3 = _mk([(.30, .85), (.50, .90), (.60, .92), (.70, .95), (.75, .95), (.80, .96)])
+    # Muchas etapas pero con freno humano (más técnicas que A, menos riesgo):
+    B  = _mk([(.40, .25), (.50, .20), (.30, .30), (.60, .25),
+              (.40, .20), (.50, .30), (.30, .25), (.60, .20)])
+    # Control: actividad dispersa sin orquestación crítica:
+    C  = _mk([(.20, .10), (.25, .15), (.20, .10), (.30, .12),
+              (.25, .10), (.20, .15), (.30, .10), (.20, .12)])
+
+    trajectories = [
+        ("A2", A2, assess_trajectory(A2, label="A2 autónoma intensa")),
+        ("A",  A,  assess_trajectory(A,  label="A  autónoma fuerte")),
+        ("A3", A3, assess_trajectory(A3, label="A3 autónoma moderada")),
+        ("B",  B,  assess_trajectory(B,  label="B  muchas etapas, freno")),
+        ("C",  C,  assess_trajectory(C,  label="C  control")),
+    ]
+
+    print("\n--- Marco por conteo de etapas (tipo ATT&CK) ---")
+    for name, stages, _ in trajectories:
+        print(f"  {name}: {baseline_count(stages)} etapas")
+    print("  Por inventario, B y C (8) superan a A/A2/A3 (6).")
+    print("  El conteo no distingue autonomía, acoplamiento ni recuperación.")
+
+    print("\n--- Lectura PRAMA por régimen e intensidad ---")
+    print(f"  {'trayectoria':24}{'régimen':27}{'riesgo':7}{'score':>6}   int/per/irr")
+    for name, _, r in trajectories:
+        print(f"  {r['label']:24}{r['regime']:27}{r['risk_level']:7}"
+              f"{r['risk_score']:6}   "
+              f"{r['intensity']:.2f}/{r['persistence']:.2f}/{r['irreversibility']:.2f}")
+
+    print("\n" + "=" * 78)
+    print("  RESULTADO")
+    print("=" * 78)
+    print("  Conteo:  A/A2/A3 = 6 etapas   B/C = 8 etapas   → B,C ≥ A (no discrimina)")
+    print("  PRAMA:   A2 > A > A3 (ALTO) ≫ B (MEDIO) > C (BAJO)")
+    print()
+    print("  El conteo confunde lo peligroso con lo inocuo: B y C, con más etapas,")
+    print("  parecerían mayor o igual riesgo que las trayectorias autónomas.")
+    print("  PRAMA invierte y ordena el veredicto por la dimensión que importa —")
+    print("  el acoplamiento autónomo sostenido — y distingue intensidades dentro")
+    print("  del régimen de alto riesgo sin saturar. Esa es la capa que ATT&CK,")
+    print("  por catalogar técnicas discretas, estructuralmente no puede medir.")
+    print("=" * 78)

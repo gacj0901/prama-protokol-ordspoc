@@ -1,0 +1,10 @@
+Esta demo no contiene técnicas de ataque, no modela procedimientos operativos y no debe usarse como herramienta ofensiva.
+This is a structural proof-of-concept, not a calibrated cyber-risk model.
+
+family                               | stage_count | ACI   | regime            | risk_level | risk_score | intensity | persistence | irreversibility
+-------------------------------------+-------------+-------+-------------------+------------+------------+-----------+-------------+----------------
+A2 autonomous orchestration extreme  | 6           | 0.922 | collapse-adjacent | extreme    | 93.0       | 0.922     | 0.987       | 0.884          
+A1 autonomous orchestration high     | 6           | 0.757 | collapse-adjacent | high       | 81.4       | 0.757     | 0.959       | 0.802          
+A0 autonomous orchestration moderate | 6           | 0.49  | collapse-adjacent | moderate   | 61.3       | 0.49      | 0.889       | 0.645          
+B human-gated orchestration          | 8           | 0.148 | elevated          | low        | 20.1       | 0.148     | 0.371       | 0.147          
+C non-orchestrated control           | 8           | 0.02  | stable            | minimal    | 2.8        | 0.02      | 0.051       | 0.02           
